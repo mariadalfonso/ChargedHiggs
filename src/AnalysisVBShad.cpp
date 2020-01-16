@@ -9,6 +9,10 @@
 
 //#warning Hmumu ANALYSIS NON ISO
 
+#define DEEP_B_LOOSE ((year==2016)?0.2217:(year==2017)?0.1522:0.1241)
+#define DEEP_B_MEDIUM ((year==2016)?0.6321:(year==2017)?0.4941:0.4148)
+#define DEEP_B_TIGHT ((year==2016)?0.8953:(year==2017)?.8001:.7527)
+
 void VBShadAnalysis::SetLeptonCuts(Lepton *l){ 
     l->SetIsoCut(-1); 
     l->SetPtCut(10); 
@@ -25,7 +29,11 @@ void VBShadAnalysis::SetLeptonCuts(Lepton *l){
 }
 
 void VBShadAnalysis::SetJetCuts(Jet *j) { 
-    j->SetBCut(0.8484); //L=0.5426 , M=  0.8484, T0.9535 
+    j->SetBCut(-100); //L=0.5426 , M=  0.8484, T0.9535
+    //    j->SetDeepBCut(DEEP_B_LOOSE);
+    j->SetDeepBCut(DEEP_B_MEDIUM);
+    //    j->SetBCut(0.8484); //L=0.5426 , M=  0.8484, T0.9535
+    //    j->SetBCut(0.5426); //L=0.5426 , M=  0.8484, T0.9535
     j->SetEtaCut(4.7); 
     j->SetEtaCutCentral(2.5); 
     j->SetPtCut(30); 
@@ -51,7 +59,7 @@ void VBShadAnalysis::SetTauCuts(Tau *t){
 
 void VBShadAnalysis::SetFatJetCuts(FatJet *f){
     f->SetEtaCut(2.5);
-    f->SetPtCut(200);
+    f->SetPtCut(250);
     f->SetSDMassCut(30);
 }
 
@@ -75,8 +83,15 @@ void VBShadAnalysis::Init(){
         Book ("VBShadAnalysis/Baseline/pT_FatJet_RR_"+l, "pT_FatJet; pT [GeV]; Events", 120,0,2400.);
         Book ("VBShadAnalysis/Baseline/SDMass_FatJet_"+l, "SDMass_FatJet; SDMass [GeV]; Events", 100,0,200.);
         Book ("VBShadAnalysis/Baseline/Tau21_FatJet_"+l, "Tau21_FatJet; tau21; Events", 50,0,1.0);
+
         Book ("VBShadAnalysis/Baseline/ZHbbvsQCD_FatJet_"+l, "ZHbbvsQCD_FatJet; ZHbbvsQCD; Events", 50,0,1.0);
-        Book ("VBShadAnalysis/Baseline/ZHbbvsQCD_FatJetFake_"+l, "ZHbbvsQCD_FatJet; ZHbbvsQCD; Events", 50,0,1.0);
+        Book ("VBShadAnalysis/Baseline/ZHbbvsQCD_FatJetFake_"+l, "ZHbbvsQCD_FatJetFake; ZHbbvsQCD; Events", 50,0,1.0);
+        Book ("VBShadAnalysis/Baseline/WvsQCD_FatJet_"+l, "WvsQCD_FatJet; WvsQCD; Events", 50,0,1.0);
+        Book ("VBShadAnalysis/Baseline/WvsQCD_FatJetFake_"+l, "WvsQCD_FatJetFake; WvsQCD; Events", 50,0,1.0);
+        Book ("VBShadAnalysis/Baseline/TvsQCD_FatJet_"+l, "TvsQCD_FatJet; TvsQCD; Events", 50,0,1.0);
+        Book ("VBShadAnalysis/Baseline/TvsQCD_FatJetFake_"+l, "TvsQCD_FatJetFake; TvsQCD; Events", 50,0,1.0);
+        Book ("VBShadAnalysis/Baseline/ZHccvsQCD_FatJet_"+l, "ZHccvsQCD_FatJet; ZHccvsQCD; Events", 50,0,1.0);
+        Book ("VBShadAnalysis/Baseline/ZHccvsQCD_FatJetFake_"+l, "ZHccvsQCD_FatJetFake; ZHccvsQCD; Events", 50,0,1.0);
 
         //Jet
         Book ("VBShadAnalysis/Baseline/NJet_"+l, "NJet; FatJet; Events", 10,0,10);
@@ -199,7 +214,7 @@ void VBShadAnalysis::Init(){
 
 }
 
-float VBShadAnalysis::jettagForBoosted(Event*e, string label, string systname) {
+float VBShadAnalysis::jettagForBoosted(Event*e, string label, string systname, float minEtaV, float maxEtaV) {
 
     forwardJets.clear();
 
@@ -213,9 +228,14 @@ float VBShadAnalysis::jettagForBoosted(Event*e, string label, string systname) {
     for(unsigned k=0; k<selectedJets.size(); ++k) {
         for(unsigned l=0; l<k; ++l) {
             if( selectedJets[k]->Eta() * selectedJets[l]->Eta() >=0 ) continue;
-            Mkl = selectedJets[k]->InvMass(selectedJets[l]);
-            double chi2 = norm / (Mkl*Mkl);
-            if(chi2<chi2_) { chi2_=chi2; index_k= k; index_l=l; }
+
+            if(selectedJets[k]->Eta() <  minEtaV or selectedJets[k]->Eta() > maxEtaV) {
+                if(selectedJets[l]->Eta() <  minEtaV or selectedJets[l]->Eta() > maxEtaV) {
+                    Mkl = selectedJets[k]->InvMass(selectedJets[l]);
+                    double chi2 = norm / (Mkl*Mkl);
+                    if(chi2<chi2_) { chi2_=chi2; index_k= k; index_l=l; }
+                }
+            }
         }
     }
 
@@ -228,7 +248,7 @@ float VBShadAnalysis::jettagForBoosted(Event*e, string label, string systname) {
 }
 
 
-float VBShadAnalysis::resolvedtagger(Event*e, float MV, string label, string systname) {
+float VBShadAnalysis::resolvedtagger(Event*e, float MV, string label, string systname, float etaV1) {
 
     // Delta Eta of the two leading jets < 1.5
 
@@ -251,17 +271,21 @@ float VBShadAnalysis::resolvedtagger(Event*e, float MV, string label, string sys
         for(unsigned j=0; j<i; ++j) {
 
             Mij = selectedJets[i]->InvMass(selectedJets[j]);
+            float minEtaV = std::min(etaV1,(float)(selectedJets[i]->GetP4() + selectedJets[j]->GetP4()).Eta());
+            float maxEtaV = std::max(etaV1,(float)(selectedJets[i]->GetP4() + selectedJets[j]->GetP4()).Eta());
 
             for(unsigned k=0; k<j; ++k) {
                 for(unsigned l=0; l<k; ++l) {
 
                     if( selectedJets[k]->Eta() * selectedJets[l]->Eta() >=0 ) continue;
 
-                    Mkl = selectedJets[k]->InvMass(selectedJets[l]);
-
-                    double chi2 = norm / (Mkl*Mkl) + (Mij*Mij - MV*MV)/MVres;
-                    if(chi2<chi2_) { chi2_=chi2; index_i=i; index_j=j; index_k= k; index_l=l; }
-
+                    if(selectedJets[k]->Eta() <  minEtaV or selectedJets[k]->Eta() > maxEtaV) {
+                        if(selectedJets[l]->Eta() <  minEtaV or selectedJets[l]->Eta() > maxEtaV) {
+                            Mkl = selectedJets[k]->InvMass(selectedJets[l]);
+                            double chi2 = norm / (Mkl*Mkl) + (Mij*Mij - MV*MV)/MVres;
+                            if(chi2<chi2_) { chi2_=chi2; index_i=i; index_j=j; index_k= k; index_l=l; }
+                        }
+                    }
                 }
             }
         }
@@ -343,6 +367,7 @@ void VBShadAnalysis::getObjects(Event* e, string label, string systname )
 
     //AK8 jet
     selectedFatJets.clear();
+    selectedFatZbb.clear();
     for(unsigned i=0;i<e->NFatJets() ; ++i)
     {
 
@@ -361,13 +386,15 @@ void VBShadAnalysis::getObjects(Event* e, string label, string systname )
             Fill("VBShadAnalysis/Baseline/SDMass_FatJet_" +label, systname, f->SDMass(), e->weight() );
             Fill("VBShadAnalysis/Baseline/Tau21_FatJet_" +label, systname, f->Tau2()/f->Tau1(), e->weight() );
             Fill("VBShadAnalysis/Baseline/ZHbbvsQCD_FatJet_" +label, systname, f->ZHbbvsQCD(), e->weight() );
+            Fill("VBShadAnalysis/Baseline/ZHccvsQCD_FatJet_" +label, systname, f->ZHccvsQCD(), e->weight() );
             //            if(topology==1) Fill("VBShadAnalysis/Baseline/pT_FatJet_BB_" +label, systname, f->Pt(), e->weight() );
             //            if(topology==2) Fill("VBShadAnalysis/Baseline/pT_FatJet_RB_" +label, systname, f->Pt(), e->weight() );
             //            if(topology==0) Fill("VBShadAnalysis/Baseline/pT_FatJet_RR_" +label, systname, f->Pt(), e->weight() );
         } else {
-
             Fill("VBShadAnalysis/Baseline/ZHbbvsQCD_FatJetFake_" +label, systname, f->ZHbbvsQCD(), e->weight() );
-
+            Fill("VBShadAnalysis/Baseline/WvsQCD_FatJetFake_" +label, systname, f->WvsQCD(), e->weight() );
+            Fill("VBShadAnalysis/Baseline/TvsQCD_FatJetFake_" +label, systname, f->TvsQCD(), e->weight() );
+            Fill("VBShadAnalysis/Baseline/ZHccvsQCD_FatJetFake_" +label, systname, f->ZHccvsQCD(), e->weight() );
         }
 
         double dPhiFatMet=fabs(ChargedHiggs::deltaPhi(f->Phi(), e->GetMet().Phi()));
@@ -379,10 +406,16 @@ void VBShadAnalysis::getObjects(Event* e, string label, string systname )
             selectedFatJets.push_back(f);
             Fill("VBShadAnalysis/Baseline/pT_FatJet_" +label, systname, f->Pt(), e->weight() );
         }
+
+        if(f->IsZbbJet()) {
+            selectedFatZbb.push_back(f);
+            Fill("VBShadAnalysis/Baseline/pT_FatJet_" +label, systname, f->Pt(), e->weight() );
+        }
+
+
     }
 
     Fill("VBShadAnalysis/Baseline/NFatJet_" +label, systname, selectedFatJets.size(), e->weight() );
-
 
     Fill("VBShadAnalysis/Cutflow_" +label, systname, 5, e->weight() );  //NFatjet cut
 
@@ -396,6 +429,7 @@ void VBShadAnalysis::getObjects(Event* e, string label, string systname )
     for(unsigned i=0;i<e->Njets() ; ++i)
     {
         Jet *j=e->GetJet(i);
+        if (j->GetDeepB() > DEEP_B_MEDIUM) continue;
 
         Fill("VBShadAnalysis/Baseline/pT_Jet_" +label, systname, j->Pt(), e->weight() );
 
@@ -464,6 +498,8 @@ void VBShadAnalysis::setTree(Event*e, string label, string category )
     if(label.find("WPhadWPhadJJ") !=string::npos ) mc = 1 ;
     if(label.find("ZbbZhadJJ") !=string::npos ) mc = 2 ;
     if(label.find("ZnnZhadJJ") !=string::npos ) mc = 3 ;
+
+    if(label.find("DoublyChargedHiggsGMmodel_HWW_M1500") !=string::npos ) mc = 11 ;
 
     if(label.find("MULTIBOSON") !=string::npos) mc = 100 ;
     if(label.find("TRIBOSON") !=string::npos) mc = 110 ;
@@ -574,7 +610,7 @@ int VBShadAnalysis::analyze(Event *e, string systname)
     // noMET with B
     // noMET noB
     if ( doHADAnalysis and e->Bjets() > 0 ) return EVENT_NOT_USED;
-    if ( doBAnalysis and e->Bjets() == 0 ) return EVENT_NOT_USED;
+    if ( doBAnalysis and (e->Bjets() == 0 or e->Bjets()>2) ) return EVENT_NOT_USED;
 
     Fill("VBShadAnalysis/Baseline/NBJet_" +label, systname, e->Bjets(), e->weight() );
     Fill("VBShadAnalysis/Cutflow_" +label, systname, 4, e->weight() );  //4--veto b
@@ -616,7 +652,7 @@ int VBShadAnalysis::analyze(Event *e, string systname)
             evt_PetaVV = selectedFatJets[0]->GetP4().Eta() * selectedFatJets[1]->GetP4().Eta();
             evt_EtaMinV = std::min(selectedFatJets[0]->Eta(),selectedFatJets[1]->Eta());
             evt_EtaMaxV = std::max(selectedFatJets[0]->Eta(),selectedFatJets[1]->Eta());
-            float Mjj=jettagForBoosted(e, label, systname);
+            float Mjj=jettagForBoosted(e, label, systname, evt_EtaMinV, evt_EtaMaxV);
             //            for(unsigned iter=0; iter<selectedJets.size(); ++iter) {
             //                forwardJets.push_back(selectedJets[iter]);
             //            }
@@ -625,7 +661,7 @@ int VBShadAnalysis::analyze(Event *e, string systname)
         if(selectedFatJets.size()==1 and selectedJets.size()>3) {
             category="";
             double mBoson=80.;
-            double MV = resolvedtagger(e, mBoson, label, systname);
+            double MV = resolvedtagger(e, mBoson, label, systname, selectedFatJets[0]->Eta());
             if(bosonJets.size()>1) Fill("VBShadAnalysis/Baseline/ResBosonMass_"+label, systname, MV, e->weight() );
             if(MV>(mBoson-20) and MV<(mBoson+20) and bosonJets.size()>1) {
                 category="_RB";
@@ -655,16 +691,17 @@ int VBShadAnalysis::analyze(Event *e, string systname)
         evt_DetaVV=-100;
         evt_PetaVV=-100;
 
-        if(selectedFatJets.size()>1 and selectedJets.size()>1) {
-            Fill("VBShadAnalysis/Baseline/pT_BJet_"+label, systname, e->GetBjet(0)->Pt(), e->weight() );
-            // TEMPORARY the b-jet is inside one of the fatjet
-            float DRjetB = selectedFatJets[0]->DeltaR(e->GetBjet(0));
-            float DRjet2B = selectedFatJets[1]->DeltaR(e->GetBjet(0));
-            if(DRjetB>0.8 and DRjet2B>0.8 and e->GetBjet(0)->Pt() < 100) {
+        if(selectedFatZbb.size()==1 and selectedFatJets.size()>1 and selectedJets.size()>1) {
+            Fill("VBShadAnalysis/Baseline/pT_BJet_"+label, systname, selectedFatZbb[0]->GetP4().Pt(), e->weight() );
+
+            // the Zbb should be one of the highest FatJet
+            // to be checked if probability WvsQCDMD and ZHbbvsQCDMD make sense
+            if(selectedFatZbb[0]->GetP4()!=selectedFatJets[0]->GetP4() and selectedFatZbb[0]->GetP4()!=selectedFatJets[1]->GetP4()) {
                 category="";
             } else {
                 category="_BBtag";
             }
+
             //            evt_MVV = selectedFatJets[0]->InvMass(selectedFatJets[1]);
             p4VV = (selectedFatJets[0]->GetP4()+selectedFatJets[1]->GetP4());
 
@@ -677,36 +714,30 @@ int VBShadAnalysis::analyze(Event *e, string systname)
             evt_PetaVV = selectedFatJets[0]->GetP4().Eta() * selectedFatJets[1]->GetP4().Eta();
             evt_EtaMinV = std::min(selectedFatJets[0]->Eta(),selectedFatJets[1]->Eta());
             evt_EtaMaxV = std::max(selectedFatJets[0]->Eta(),selectedFatJets[1]->Eta());
-            float Mjj=jettagForBoosted(e, label, systname);
+            float Mjj=jettagForBoosted(e, label, systname, evt_EtaMinV, evt_EtaMaxV);
             //            for(unsigned iter=0; iter<selectedJets.size(); ++iter) {
             //                forwardJets.push_back(selectedJets[iter]);
             //            }
         }
 
-        if(selectedFatJets.size()==1 and selectedJets.size()>3) {
+        if(selectedFatZbb.size()==1 and selectedFatJets.size()==1 and selectedJets.size()>3) {
             category="";
 
-            // TEMPORARY the b-jet is inside one of the fatjet
-            float DRjetB = selectedFatJets[0]->DeltaR(e->GetBjet(0));
-
-            double mBoson=80.;
-            double MV = resolvedtagger(e, mBoson, label, systname);
+            // target the ZbbZqq + ZbbWqq
+            double mBoson=90.;
+            double MV = resolvedtagger(e, mBoson, label, systname, selectedFatJets[0]->Eta());
             if(bosonJets.size()>1) Fill("VBShadAnalysis/Baseline/ResBosonMass_"+label, systname, MV, e->weight() );
             if(MV>(mBoson-20) and MV<(mBoson+20) and bosonJets.size()>1) {
-                if(DRjetB>0.8) {
-                    category="";
-                } else {
-                    category="_RBtag";
-                }
-                p4VV = ( selectedFatJets[0]->GetP4() + bosonJets[0]->GetP4() + bosonJets[1]->GetP4());
+                category="_RBtag";
+                p4VV = ( selectedFatZbb[0]->GetP4() + bosonJets[0]->GetP4() + bosonJets[1]->GetP4());
                 evt_MVV = p4VV.M();
                 evt_PTVV = p4VV.Pt();
-                evt_PTV1 = selectedFatJets[0]->GetP4().Pt();
+                evt_PTV1 = selectedFatZbb[0]->GetP4().Pt();
                 evt_PTV2 = (bosonJets[0]->GetP4() + bosonJets[1]->GetP4()).Pt();
-                evt_EtaMinV = std::min(selectedFatJets[0]->Eta(),float((bosonJets[0]->GetP4() + bosonJets[1]->GetP4()).Eta()));
-                evt_EtaMaxV = std::max(selectedFatJets[0]->Eta(),float((bosonJets[0]->GetP4() + bosonJets[1]->GetP4()).Eta()));
-                evt_DetaVV = fabs(selectedFatJets[0]->GetP4().Eta() - (bosonJets[1]->GetP4() + bosonJets[0]->GetP4()).Eta());
-                evt_PetaVV = selectedFatJets[0]->GetP4().Eta() * (bosonJets[1]->GetP4() + bosonJets[0]->GetP4()).Eta();
+                evt_EtaMinV = std::min(selectedFatZbb[0]->Eta(),float((bosonJets[0]->GetP4() + bosonJets[1]->GetP4()).Eta()));
+                evt_EtaMaxV = std::max(selectedFatZbb[0]->Eta(),float((bosonJets[0]->GetP4() + bosonJets[1]->GetP4()).Eta()));
+                evt_DetaVV = fabs(selectedFatZbb[0]->GetP4().Eta() - (bosonJets[1]->GetP4() + bosonJets[0]->GetP4()).Eta());
+                evt_PetaVV = selectedFatZbb[0]->GetP4().Eta() * (bosonJets[1]->GetP4() + bosonJets[0]->GetP4()).Eta();
             }
         }
     }
@@ -729,16 +760,18 @@ int VBShadAnalysis::analyze(Event *e, string systname)
             evt_MVV = ChargedHiggs::mt(selectedFatJets[0]->Pt(), e->GetMet().Pt(), selectedFatJets[0]->Phi(), e->GetMet().Phi());
             evt_PTV1 = e->GetMet().Pt();
             evt_PTV2 = selectedFatJets[0]->GetP4().Pt();
-            float Mjj=jettagForBoosted(e, label, systname);
+            float Mjj=jettagForBoosted(e, label, systname, selectedFatJets[0]->Eta(),selectedFatJets[0]->Eta());
             //            for(unsigned iter=0; iter<selectedJets.size(); ++iter) {
             //                forwardJets.push_back(selectedJets[iter]);
             //            }
         }
 
+        // target the ZbbZqq + ZbbWqq
         if(selectedFatJets.size()==0 and selectedJets.size()>3) {
             category="";
             double mBoson=90.;
-            double MV = resolvedtagger(e, mBoson, label, systname);
+            // MARIA: dummy use of the centrality for now
+            double MV = resolvedtagger(e, mBoson, label, systname, 0.);
             if(bosonJets.size()>1) Fill("VBShadAnalysis/Baseline/ResBosonMass_"+label, systname, MV, e->weight() );
             if(MV>(mBoson-20) and MV<(mBoson+20) and bosonJets.size()>1) {
                 category="_RMET";
